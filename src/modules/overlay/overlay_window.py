@@ -1,7 +1,7 @@
 """悬浮窗主窗口 - 无边框、置顶、底部居中的横向底栏"""
 
 from PySide6.QtCore import Qt, QPoint
-from PySide6.QtGui import QFont, QColor, QPalette
+from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QApplication,
     QGraphicsDropShadowEffect,
@@ -65,12 +65,12 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setFixedSize(PANEL_WIDTH, PANEL_HEIGHT)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        # 暗色背景
-        palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Window, QColor(BG_COLOR))
-        self.setPalette(palette)
-        self.setAutoFillBackground(True)
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {BG_COLOR};
+                border-radius: 8px;
+            }}
+        """)
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)

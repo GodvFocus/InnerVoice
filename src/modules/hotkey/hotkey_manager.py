@@ -62,18 +62,18 @@ class HotkeyManager(QObject):
         """后台线程: 注册 keyboard 钩子"""
         hotkey_name = self._settings.get("hotkey") or "right ctrl"
 
-        def on_press(event):
-            if event.name == hotkey_name and not self._is_pressed:
+        def on_press(_event=None):
+            if not self._is_pressed:
                 self._is_pressed = True
                 self._on_press()
 
-        def on_release(event):
-            if event.name == hotkey_name and self._is_pressed:
+        def on_release(_event=None):
+            if self._is_pressed:
                 self._is_pressed = False
                 self._on_release()
 
-        keyboard.on_press(on_press, suppress=False)
-        keyboard.on_release(on_release, suppress=False)
+        keyboard.on_press_key(hotkey_name, on_press, suppress=False)
+        keyboard.on_release_key(hotkey_name, on_release, suppress=False)
 
         # Enter / Escape 全局监听
         keyboard.add_hotkey("enter", lambda: self._on_enter())
