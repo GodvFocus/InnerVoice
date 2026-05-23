@@ -4,6 +4,7 @@ build/
 out/
 tmp/
 temp/
+__pycache__/
 
 # Logs
 *.log
@@ -11,6 +12,7 @@ temp/
 # Local configs
 .env
 .env.local
+*.local.json
 
 # OS / editor
 .DS_Store
