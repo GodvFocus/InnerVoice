@@ -81,3 +81,18 @@ class TestStateMachine:
         sm.transition(AppState.LISTENING)
         assert len(signals) == 1
         assert signals[0] == (AppState.LISTENING, AppState.IDLE)
+
+    def test_listening_to_idle_on_cancel(self, sm):
+        """Escape 在录音中应该能取消"""
+        sm.transition(AppState.LISTENING)
+        ok = sm.transition(AppState.IDLE)
+        assert ok is True
+        assert sm.current_state == AppState.IDLE
+
+    def test_processing_to_idle_on_cancel(self, sm):
+        """Escape 在识别中也应该能取消"""
+        sm.transition(AppState.LISTENING)
+        sm.transition(AppState.PROCESSING)
+        ok = sm.transition(AppState.IDLE)
+        assert ok is True
+        assert sm.current_state == AppState.IDLE

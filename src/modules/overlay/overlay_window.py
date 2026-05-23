@@ -1,7 +1,7 @@
 """悬浮窗主窗口 - 无边框、置顶、底部居中的横向底栏"""
 
-from PySide6.QtCore import Qt, QTimer, QPoint
-from PySide6.QtGui import QFont, QColor, QPalette, QEnterEvent
+from PySide6.QtCore import Qt, QPoint
+from PySide6.QtGui import QFont, QColor, QPalette
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QApplication,
     QGraphicsDropShadowEffect,
@@ -18,7 +18,6 @@ SUB_TEXT_COLOR = "#a6adc4"
 BTN_CONFIRM_BG = "#cba6f7"
 BTN_CONFIRM_TEXT = "#1e1e2e"
 BTN_CANCEL_BORDER = "#585b70"
-BORDER_RADIUS = 10
 PANEL_WIDTH = 480
 PANEL_HEIGHT = 42
 OFFSET_Y = 60  # 距屏幕底部距离

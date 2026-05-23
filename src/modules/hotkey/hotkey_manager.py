@@ -36,6 +36,11 @@ class HotkeyManager(QObject):
         self._press_timer: threading.Timer | None = None
         self._is_pressed = False
         self._thread: threading.Thread | None = None
+        self._text_getter: callable | None = None
+
+    def set_text_getter(self, getter: callable):
+        """设置文本获取回调, 用于 Enter 确认时获取 overlay 中的文本"""
+        self._text_getter = getter
 
     @property
     def is_running(self) -> bool:
@@ -55,9 +60,7 @@ class HotkeyManager(QObject):
 
     def _listen(self):
         """后台线程: 注册 keyboard 钩子"""
-        hotkey = self._settings.get("hotkey")
-        threshold = self._settings.get("long_press_threshold_ms") / 1000.0
-        hotkey_name = "right ctrl"
+        hotkey_name = self._settings.get("hotkey") or "right ctrl"
 
         def on_press(event):
             if event.name == hotkey_name and not self._is_pressed:
@@ -101,8 +104,11 @@ class HotkeyManager(QObject):
         self._sm.transition(AppState.LISTENING)
 
     def _on_enter(self):
-        """Enter: 确认注入"""
+        """Enter: 确认注入, 发射 text_confirmed 信号"""
         if self._sm.current_state == AppState.PREVIEW:
+            text = self._text_getter() if self._text_getter else ""
+            if text:
+                self.text_confirmed.emit(text)
             self._sm.transition(AppState.IDLE)
 
     def _on_esc(self):

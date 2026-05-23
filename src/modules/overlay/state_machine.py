@@ -8,8 +8,8 @@ from shared.types.enums import AppState
 # 合法转换表: from_state -> {to_state, ...}
 TRANSITIONS: dict[AppState, set[AppState]] = {
     AppState.IDLE:       {AppState.LISTENING},
-    AppState.LISTENING:  {AppState.PROCESSING, AppState.ERROR},
-    AppState.PROCESSING: {AppState.PREVIEW, AppState.ERROR},
+    AppState.LISTENING:  {AppState.PROCESSING, AppState.ERROR, AppState.IDLE},
+    AppState.PROCESSING: {AppState.PREVIEW, AppState.ERROR, AppState.IDLE},
     AppState.PREVIEW:    {AppState.IDLE, AppState.ERROR},
     AppState.ERROR:      {AppState.IDLE},
 }

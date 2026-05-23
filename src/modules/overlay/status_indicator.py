@@ -74,7 +74,7 @@ class StatusIndicator(QWidget):
             self._pulse_scale = 1.0
             self.update()
 
-    def paintEvent(self, event):
+    def paintEvent(self, _event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 

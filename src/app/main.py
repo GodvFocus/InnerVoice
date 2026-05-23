@@ -55,6 +55,8 @@ def main():
 
     # 热键管理
     hotkey_manager = HotkeyManager(state_machine, settings)
+    hotkey_manager.set_text_getter(overlay.text)
+    hotkey_manager.text_confirmed.connect(lambda text: print(f"[确认注入] {text}"))
     hotkey_manager.start()
 
     # Ctrl+C 退出
