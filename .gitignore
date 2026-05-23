@@ -1,0 +1,22 @@
+# Runtime
+dist/
+build/
+out/
+tmp/
+temp/
+
+# Logs
+*.log
+
+# Local configs
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Crash dumps
+*.stackdump
