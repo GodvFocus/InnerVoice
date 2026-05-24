@@ -18,58 +18,73 @@ class PromptManager:
     def get_all(self) -> list[dict]:
         """获取所有风格，按 sort_order 排序"""
         conn = get_connection(self._db_path)
-        rows = conn.execute(
-            "SELECT id, name, prompt, is_preset, is_default, sort_order "
-            "FROM polish_styles ORDER BY sort_order"
-        ).fetchall()
-        conn.close()
-        return [dict(row) for row in rows]
+        try:
+            rows = conn.execute(
+                "SELECT id, name, prompt, is_preset, is_default, sort_order "
+                "FROM polish_styles ORDER BY sort_order"
+            ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
 
     def get_default(self) -> dict | None:
         """获取默认风格"""
         conn = get_connection(self._db_path)
-        row = conn.execute(
-            "SELECT id, name, prompt, is_preset, is_default, sort_order "
-            "FROM polish_styles WHERE is_default = 1"
-        ).fetchone()
-        conn.close()
-        return dict(row) if row else None
+        try:
+            row = conn.execute(
+                "SELECT id, name, prompt, is_preset, is_default, sort_order "
+                "FROM polish_styles WHERE is_default = 1"
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
 
     def get_by_name(self, name: str) -> dict | None:
         """按名称获取风格"""
         conn = get_connection(self._db_path)
-        row = conn.execute(
-            "SELECT id, name, prompt, is_preset, is_default, sort_order "
-            "FROM polish_styles WHERE name = ?", (name,)
-        ).fetchone()
-        conn.close()
-        return dict(row) if row else None
+        try:
+            row = conn.execute(
+                "SELECT id, name, prompt, is_preset, is_default, sort_order "
+                "FROM polish_styles WHERE name = ?", (name,)
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
 
     def add(self, name: str, prompt: str) -> int:
         """新增自定义风格，返回新行 id"""
         conn = get_connection(self._db_path)
-        max_order = conn.execute(
-            "SELECT COALESCE(MAX(sort_order), 0) FROM polish_styles"
-        ).fetchone()[0]
-        cursor = conn.execute(
-            "INSERT INTO polish_styles (name, prompt, is_preset, is_default, sort_order) "
-            "VALUES (?, ?, 0, 0, ?)",
-            (name, prompt, max_order + 1),
-        )
-        conn.commit()
-        row_id = cursor.lastrowid
-        conn.close()
-        return row_id
+        try:
+            max_order = conn.execute(
+                "SELECT COALESCE(MAX(sort_order), 0) FROM polish_styles"
+            ).fetchone()[0]
+            cursor = conn.execute(
+                "INSERT INTO polish_styles (name, prompt, is_preset, is_default, sort_order) "
+                "VALUES (?, ?, 0, 0, ?)",
+                (name, prompt, max_order + 1),
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def update(self, style_id: int, name: str, prompt: str):
         """更新风格名称和提示词"""
         conn = get_connection(self._db_path)
-        conn.execute(
-            "UPDATE polish_styles SET name = ?, prompt = ? WHERE id = ?",
-            (name, prompt, style_id),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                "UPDATE polish_styles SET name = ?, prompt = ? WHERE id = ?",
+                (name, prompt, style_id),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def delete(self, style_id: int):
         """删除风格。如果是默认风格，先自动切换到排序最前的预设风格"""

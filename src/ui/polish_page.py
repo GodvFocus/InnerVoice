@@ -262,7 +262,11 @@ class PolishPage(QWidget):
     def _on_add(self):
         dlg = StyleDialog("新增润色风格", parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            self._manager.add(dlg.style_name(), dlg.style_prompt())
+            try:
+                self._manager.add(dlg.style_name(), dlg.style_prompt())
+            except Exception:
+                QMessageBox.warning(self, "错误", "风格名称已存在，请使用其他名称")
+                return
             self._refresh_table()
             self.styles_changed.emit()
 
@@ -274,13 +278,20 @@ class PolishPage(QWidget):
             parent=self,
         )
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            self._manager.update(
-                style["id"], dlg.style_name(), dlg.style_prompt()
-            )
+            try:
+                self._manager.update(
+                    style["id"], dlg.style_name(), dlg.style_prompt()
+                )
+            except Exception:
+                QMessageBox.warning(self, "错误", "风格名称已存在，请使用其他名称")
+                return
             self._refresh_table()
             self.styles_changed.emit()
 
     def _on_delete(self, style: dict):
+        if style.get("is_preset"):
+            QMessageBox.information(self, "提示", "预设风格不可删除")
+            return
         reply = QMessageBox.question(
             self,
             "确认删除",
