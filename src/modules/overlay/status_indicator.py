@@ -11,7 +11,6 @@ from shared.types.enums import AppState
 COLORS = {
     AppState.IDLE:       QColor("#6c7086"),  # 灰色
     AppState.LISTENING:  QColor("#f38ba8"),  # 红色
-    AppState.PROCESSING: QColor("#f9e2af"),  # 黄色
     AppState.PREVIEW:    QColor("#a6e3a1"),  # 绿色
     AppState.ERROR:      QColor("#f38ba8"),  # 红色
 }
@@ -54,13 +53,6 @@ class StatusIndicator(QWidget):
             self._anim.setStartValue(1.0)
             self._anim.setEndValue(1.5)
             self._anim.setEasingCurve(QEasingCurve.InOutSine)
-            self._anim.start()
-        elif new_state == AppState.PROCESSING:
-            # 旋转感: 快速脉冲
-            self._anim.setStartValue(1.0)
-            self._anim.setEndValue(1.3)
-            self._anim.setDuration(400)
-            self._anim.setEasingCurve(QEasingCurve.InOutQuad)
             self._anim.start()
         elif new_state == AppState.ERROR:
             # 快闪
