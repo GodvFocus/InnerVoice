@@ -1,9 +1,7 @@
-"""全局快捷键管理测试"""
+"""全局快捷键管理测试 — 4 状态 + ASR 信号"""
 
 import sys
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
@@ -21,7 +19,7 @@ from core.config.settings import Settings
 
 
 class TestHotkeyManager:
-    """HotkeyManager 单元测试 (mock keyboard 库)"""
+    """HotkeyManager 单元测试"""
 
     @pytest.fixture
     def sm(self):
@@ -43,42 +41,50 @@ class TestHotkeyManager:
         assert hm.is_running is False
 
     def test_long_press_detection(self, sm, settings):
-        """模拟长按: press -> 超时 -> transition to LISTENING"""
         hm = HotkeyManager(sm, settings)
         hm._on_press()
         hm._on_long_press_timeout()
         assert sm.current_state == AppState.LISTENING
 
-    def test_release_after_long_press(self, sm, settings):
-        """长按后释放 -> PROCESSING"""
+    def test_long_press_emits_asr_start(self, sm, settings):
+        hm = HotkeyManager(sm, settings)
+        signals = []
+        hm.asr_start_requested.connect(lambda: signals.append("start"))
+        hm._on_press()
+        hm._on_long_press_timeout()
+        assert len(signals) == 1
+
+    def test_release_emits_asr_stop(self, sm, settings):
         hm = HotkeyManager(sm, settings)
         hm._on_press()
         hm._on_long_press_timeout()
-        assert sm.current_state == AppState.LISTENING
+        signals = []
+        hm.asr_stop_requested.connect(lambda: signals.append("stop"))
         hm._on_release()
-        assert sm.current_state == AppState.PROCESSING
+        assert len(signals) == 1
 
     def test_short_press_no_trigger(self, sm, settings):
-        """短按(<阈值)不触发"""
         hm = HotkeyManager(sm, settings)
         hm._on_press()
-        hm._on_release()  # 未超时就释放
+        hm._on_release()
         assert sm.current_state == AppState.IDLE
 
-    def test_esc_triggers_cancel(self, sm, settings):
-        """Escape 键触发取消"""
+    def test_esc_in_listening_triggers_idle(self, sm, settings):
         hm = HotkeyManager(sm, settings)
         sm.transition(AppState.LISTENING)
-        sm.transition(AppState.PROCESSING)
+        hm._on_esc()
+        assert sm.current_state == AppState.IDLE
+
+    def test_esc_in_preview_triggers_idle(self, sm, settings):
+        hm = HotkeyManager(sm, settings)
+        sm.transition(AppState.LISTENING)
         sm.transition(AppState.PREVIEW)
         hm._on_esc()
         assert sm.current_state == AppState.IDLE
 
-    def test_enter_triggers_confirm(self, sm, settings):
-        """Enter 键触发确认"""
+    def test_enter_in_preview_confirms_and_goes_idle(self, sm, settings):
         hm = HotkeyManager(sm, settings)
         sm.transition(AppState.LISTENING)
-        sm.transition(AppState.PROCESSING)
         sm.transition(AppState.PREVIEW)
         hm._on_enter()
         assert sm.current_state == AppState.IDLE
