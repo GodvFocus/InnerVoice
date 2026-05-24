@@ -1,4 +1,4 @@
-"""状态机单元测试"""
+"""状态机单元测试 — 4 状态模型"""
 
 import sys
 from pathlib import Path
@@ -8,7 +8,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 import pytest
 from PySide6.QtCore import QCoreApplication
 
-# 状态机测试需要 QApplication 实例 (Signal 依赖 QObject)
 _app = QCoreApplication.instance()
 if _app is None:
     _app = QCoreApplication([])
@@ -32,23 +31,22 @@ class TestStateMachine:
         assert ok is True
         assert sm.current_state == AppState.LISTENING
 
-    def test_listening_to_processing(self, sm):
+    def test_listening_to_preview(self, sm):
         sm.transition(AppState.LISTENING)
-        ok = sm.transition(AppState.PROCESSING)
-        assert ok is True
-        assert sm.current_state == AppState.PROCESSING
-
-    def test_processing_to_preview(self, sm):
-        sm.transition(AppState.LISTENING)
-        sm.transition(AppState.PROCESSING)
         ok = sm.transition(AppState.PREVIEW)
         assert ok is True
         assert sm.current_state == AppState.PREVIEW
 
-    def test_preview_to_idle_on_confirm(self, sm):
+    def test_preview_to_idle(self, sm):
         sm.transition(AppState.LISTENING)
-        sm.transition(AppState.PROCESSING)
         sm.transition(AppState.PREVIEW)
+        ok = sm.transition(AppState.IDLE)
+        assert ok is True
+        assert sm.current_state == AppState.IDLE
+
+    def test_listening_to_idle_on_cancel(self, sm):
+        """Escape 在录音中取消"""
+        sm.transition(AppState.LISTENING)
         ok = sm.transition(AppState.IDLE)
         assert ok is True
         assert sm.current_state == AppState.IDLE
@@ -66,10 +64,8 @@ class TestStateMachine:
         assert sm.current_state == AppState.ERROR
 
     def test_invalid_transition_returns_false(self, sm):
-        # IDLE -> PREVIEW 是不允许的
         ok = sm.transition(AppState.PREVIEW)
         assert ok is False
-        assert sm.current_state == AppState.IDLE
 
     def test_same_state_transition_returns_false(self, sm):
         ok = sm.transition(AppState.IDLE)
@@ -82,17 +78,9 @@ class TestStateMachine:
         assert len(signals) == 1
         assert signals[0] == (AppState.LISTENING, AppState.IDLE)
 
-    def test_listening_to_idle_on_cancel(self, sm):
-        """Escape 在录音中应该能取消"""
+    def test_preview_to_error(self, sm):
         sm.transition(AppState.LISTENING)
-        ok = sm.transition(AppState.IDLE)
+        sm.transition(AppState.PREVIEW)
+        ok = sm.transition(AppState.ERROR)
         assert ok is True
-        assert sm.current_state == AppState.IDLE
-
-    def test_processing_to_idle_on_cancel(self, sm):
-        """Escape 在识别中也应该能取消"""
-        sm.transition(AppState.LISTENING)
-        sm.transition(AppState.PROCESSING)
-        ok = sm.transition(AppState.IDLE)
-        assert ok is True
-        assert sm.current_state == AppState.IDLE
+        assert sm.current_state == AppState.ERROR
