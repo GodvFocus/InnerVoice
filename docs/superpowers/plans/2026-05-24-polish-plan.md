@@ -627,7 +627,7 @@ class PolishWorker(QObject):
                     {"role": "user", "content": self._text},
                 ],
                 temperature=0.3,
-                timeout=10.0,
+                timeout=30.0,
             )
             result = response.choices[0].message.content
             self.result_ready.emit(result.strip())
@@ -687,11 +687,12 @@ class PolishClient(QObject):
 
     def _cleanup(self):
         self._busy = False
+        if self._worker:
+            self._worker.deleteLater()
+            self._worker = None
         if self._thread:
             self._thread.quit()
-            self._thread.wait(2000)
             self._thread = None
-            self._worker = None
 ```
 
 - [ ] **Step 4: 编写 PolishClient 测试**
