@@ -111,7 +111,7 @@ def main():
         if TextInjector.inject_to_window(text, target_window):
             target_window = None
 
-    hotkey_manager.set_text_getter(overlay.text)
+    hotkey_manager.set_text_getter(overlay.current_text)
     hotkey_manager.text_confirmed.connect(on_confirm)
 
     # 绑定: ASR 资源清理 (在状态退回 IDLE 时统一执行)
@@ -136,7 +136,7 @@ def main():
     # 按钮: 只做状态转换, 资源清理由 on_cleanup 统一处理
     overlay.confirm_button().clicked.connect(
         lambda: (
-            on_confirm(overlay.text()),
+            on_confirm(overlay.current_text()),
             state_machine.transition(AppState.IDLE),
         )
     )
