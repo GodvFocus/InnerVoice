@@ -72,25 +72,37 @@ class PromptManager:
         conn.close()
 
     def delete(self, style_id: int):
-        """删除风格。如果是默认风格，先自动切换默认到'正式'"""
+        """删除风格。如果是默认风格，先自动切换到排序最前的预设风格"""
         conn = get_connection(self._db_path)
-        row = conn.execute(
-            "SELECT is_default FROM polish_styles WHERE id = ?", (style_id,)
-        ).fetchone()
-        if row and row["is_default"]:
-            conn.execute(
-                "UPDATE polish_styles SET is_default = 1 WHERE name = '正式'"
-            )
-        conn.execute("DELETE FROM polish_styles WHERE id = ?", (style_id,))
-        conn.commit()
-        conn.close()
+        try:
+            row = conn.execute(
+                "SELECT is_default FROM polish_styles WHERE id = ?", (style_id,)
+            ).fetchone()
+            if row and row["is_default"]:
+                conn.execute(
+                    "UPDATE polish_styles SET is_default = 1 "
+                    "WHERE id = (SELECT id FROM polish_styles "
+                    "WHERE is_preset = 1 ORDER BY sort_order LIMIT 1)"
+                )
+            conn.execute("DELETE FROM polish_styles WHERE id = ?", (style_id,))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def set_default(self, style_id: int):
         """设置指定风格为默认"""
         conn = get_connection(self._db_path)
-        conn.execute("UPDATE polish_styles SET is_default = 0")
-        conn.execute(
-            "UPDATE polish_styles SET is_default = 1 WHERE id = ?", (style_id,)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute("UPDATE polish_styles SET is_default = 0")
+            conn.execute(
+                "UPDATE polish_styles SET is_default = 1 WHERE id = ?", (style_id,)
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
