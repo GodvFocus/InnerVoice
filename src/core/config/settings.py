@@ -21,6 +21,11 @@ DEFAULTS = {
         "language": "zh_cn",
         "accent": "mandarin",
     },
+    "polish": {
+        "api_key": "",
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-chat",
+    },
 }
 
 CONFIG_FILENAME = "settings.json"

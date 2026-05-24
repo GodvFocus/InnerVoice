@@ -12,32 +12,75 @@
 
 import sys
 import signal
+import ctypes
 from pathlib import Path
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config import Settings
+from db.database import init_db
+from modules.polish.prompt_manager import PromptManager
 from modules.overlay.state_machine import StateMachine
 from modules.overlay.overlay_window import OverlayWindow
 from modules.hotkey.hotkey_manager import HotkeyManager
 from modules.asr.audio_capture import AudioCapture
 from modules.asr.iat_client import IATClient
 from modules.injector.text_injector import TextInjector
+from modules.polish.polish_client import PolishClient
 from shared.types.enums import AppState
+from ui.main_window import MainWindow
+
+
+def _configure_windows_taskbar_identity() -> None:
+    """Bind the process to a stable AppUserModelID so the taskbar uses the app icon."""
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "InnerVoice.DesktopApp"
+        )
+    except (AttributeError, OSError):
+        pass
 
 
 def main():
+    _configure_windows_taskbar_identity()
     app = QApplication(sys.argv)
-    app.setApplicationName("InnerVoice")
+    app.setApplicationName("Flow")
     app.setQuitOnLastWindowClosed(False)
+
+    icon_path = Path(__file__).resolve().parents[2] / "assets" / "app-icon.png"
+    app_icon = QIcon(str(icon_path))
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
+
 
     # 模块初始化
     settings = Settings()
+
+    # 数据库与主窗口初始化
+    try:
+        data_dir = Path(__file__).parent.parent.parent / "data"
+        db_path = init_db(data_dir)
+        prompt_manager = PromptManager(db_path)
+        main_window = MainWindow(prompt_manager, app_icon=app_icon)
+        main_window.show()
+    except Exception as e:
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.critical(None, "启动失败", f"数据库初始化失败：{e}")
+        sys.exit(1)
+
     state_machine = StateMachine()
     overlay = OverlayWindow()
+
+    # 润色客户端
+    polish_client = PolishClient()
+    polish_config = settings.get("polish")
+    _raw_text = ""  # 保持原始转写文本
 
     asr_config = settings.get("asr")
     audio_capture = AudioCapture()
@@ -60,12 +103,50 @@ def main():
     # 绑定: IATClient -> OverlayWindow (流式文本)
     iat_client.partial_result.connect(overlay.set_text)
 
+    def start_polish(style_name: str = None):
+        """开始润色"""
+        nonlocal _raw_text
+        if not polish_config.get("api_key"):
+            print("[Polish] API key 未配置，跳过润色")
+            overlay.set_polishing_state(False)
+            return
+
+        if style_name is None:
+            default_style = prompt_manager.get_default()
+            if default_style is None:
+                return
+            style_name = default_style["name"]
+
+        if style_name == "原文":
+            overlay.set_text(_raw_text)
+            overlay.set_polishing_state(False)
+            return
+
+        style = prompt_manager.get_by_name(style_name)
+        if style is None:
+            return
+
+        overlay.set_polishing_state(True)
+        polish_client.polish(
+            text=_raw_text,
+            system_prompt=style["prompt"],
+            api_key=polish_config["api_key"],
+            base_url=polish_config["base_url"],
+            model=polish_config["model"],
+        )
+
     # 绑定: IATClient 最终结果 -> PREVIEW 状态
     def on_final_result(text: str):
+        nonlocal _raw_text
         audio_capture.stop()
         iat_client.disconnect()
+        _raw_text = text
         overlay.set_text(text)
         state_machine.transition(AppState.PREVIEW)
+        # 加载风格列表并自动润色
+        styles = prompt_manager.get_all()
+        overlay.load_styles([s["name"] for s in styles])
+        start_polish()  # 使用默认风格自动润色
 
     iat_client.final_result.connect(on_final_result)
 
@@ -95,8 +176,28 @@ def main():
         if TextInjector.inject_to_window(text, target_window):
             target_window = None
 
-    hotkey_manager.set_text_getter(overlay.text)
+    hotkey_manager.set_text_getter(overlay.current_text)
     hotkey_manager.text_confirmed.connect(on_confirm)
+
+    # 绑定: 润色结果
+    def on_polish_result(result: str):
+        overlay.set_text(result)
+        overlay.set_polishing_state(False)
+
+    def on_polish_error(error: str):
+        print(f"[Polish Error] {error}")
+        overlay.set_text(_raw_text)
+        overlay.set_polishing_state(False)
+
+    polish_client.result_ready.connect(on_polish_result)
+    polish_client.error_occurred.connect(on_polish_error)
+
+    # 绑定: 风格切换
+    def on_style_switch(style_name: str):
+        if state_machine.current_state == AppState.PREVIEW:
+            start_polish(style_name)
+
+    overlay.style_changed.connect(on_style_switch)
 
     # 绑定: ASR 资源清理 (在状态退回 IDLE 时统一执行)
     def on_cleanup(new_state: AppState, old_state: AppState):
@@ -120,7 +221,7 @@ def main():
     # 按钮: 只做状态转换, 资源清理由 on_cleanup 统一处理
     overlay.confirm_button().clicked.connect(
         lambda: (
-            on_confirm(overlay.text()),
+            on_confirm(overlay.current_text()),
             state_machine.transition(AppState.IDLE),
         )
     )
