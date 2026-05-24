@@ -20,6 +20,8 @@ from PySide6.QtCore import QTimer
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config import Settings
+from db.database import init_db
+from modules.polish.prompt_manager import PromptManager
 from modules.overlay.state_machine import StateMachine
 from modules.overlay.overlay_window import OverlayWindow
 from modules.hotkey.hotkey_manager import HotkeyManager
@@ -27,6 +29,7 @@ from modules.asr.audio_capture import AudioCapture
 from modules.asr.iat_client import IATClient
 from modules.injector.text_injector import TextInjector
 from shared.types.enums import AppState
+from ui.main_window import MainWindow
 
 
 def main():
@@ -36,6 +39,14 @@ def main():
 
     # 模块初始化
     settings = Settings()
+
+    # 数据库与主窗口初始化
+    data_dir = Path(__file__).parent.parent.parent / "data"
+    db_path = init_db(data_dir)
+    prompt_manager = PromptManager(db_path)
+    main_window = MainWindow(prompt_manager)
+    main_window.show()
+
     state_machine = StateMachine()
     overlay = OverlayWindow()
 
