@@ -93,7 +93,6 @@ def main():
         if style_name is None:
             default_style = prompt_manager.get_default()
             if default_style is None:
-                overlay.set_polishing_state(False)
                 return
             style_name = default_style["name"]
 
@@ -104,7 +103,6 @@ def main():
 
         style = prompt_manager.get_by_name(style_name)
         if style is None:
-            overlay.set_polishing_state(False)
             return
 
         overlay.set_polishing_state(True)
