@@ -5,6 +5,66 @@ from openai import OpenAI
 from PySide6.QtCore import QObject, Signal, QThread
 
 
+RETURN_ONLY_TEXT_SUFFIX = (
+    "\n\n只返回润色后的最终文本，不要解释，不要加引号，不要使用 Markdown。"
+)
+
+
+def _content_part_to_text(part) -> str:
+    if part is None:
+        return ""
+
+    if isinstance(part, str):
+        return part
+
+    if isinstance(part, dict):
+        if isinstance(part.get("text"), str):
+            return part["text"]
+        if isinstance(part.get("content"), str):
+            return part["content"]
+        text_obj = part.get("text")
+        if hasattr(text_obj, "value") and isinstance(text_obj.value, str):
+            return text_obj.value
+        return ""
+
+    text = getattr(part, "text", None)
+    if isinstance(text, str):
+        return text
+    if hasattr(text, "value") and isinstance(text.value, str):
+        return text.value
+
+    content = getattr(part, "content", None)
+    if isinstance(content, str):
+        return content
+
+    return ""
+
+
+def _extract_text_from_response(response) -> str:
+    choices = getattr(response, "choices", None) or []
+    if not choices:
+        raise ValueError("LLM 未返回 choices")
+
+    message = getattr(choices[0], "message", None)
+    if message is None:
+        raise ValueError("LLM 返回中缺少 message")
+
+    content = getattr(message, "content", None)
+    if isinstance(content, str):
+        return content.strip()
+
+    if isinstance(content, list):
+        text = "".join(_content_part_to_text(part) for part in content).strip()
+        if text:
+            return text
+
+    raise ValueError("LLM 返回内容为空或格式不支持")
+
+
+def _is_parse_error(error: Exception) -> bool:
+    return isinstance(error, ValueError)
+
+
 class PolishWorker(QObject):
     """在 QThread 中执行的润色工作对象"""
 
@@ -30,15 +90,20 @@ class PolishWorker(QObject):
             response = client.chat.completions.create(
                 model=self._model,
                 messages=[
-                    {"role": "system", "content": self._system_prompt},
+                    {
+                        "role": "system",
+                        "content": self._system_prompt.rstrip() + RETURN_ONLY_TEXT_SUFFIX,
+                    },
                     {"role": "user", "content": self._text},
                 ],
                 temperature=0.3,
                 timeout=30.0,
             )
-            result = response.choices[0].message.content
-            self.result_ready.emit((result or "").strip())
+            self.result_ready.emit(_extract_text_from_response(response))
         except Exception as e:
+            if _is_parse_error(e):
+                self.result_ready.emit(self._text)
+                return
             self.error_occurred.emit(str(e))
 
 

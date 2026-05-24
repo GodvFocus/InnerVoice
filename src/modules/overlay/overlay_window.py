@@ -1,9 +1,9 @@
 """悬浮窗主窗口 - 无边框、置顶、底部居中的横向底栏"""
 
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QLabel, QPushButton, QApplication,
+    QWidget, QHBoxLayout, QLabel, QPushButton, QApplication, QComboBox,
 )
 
 from shared.types.enums import AppState
@@ -46,6 +46,8 @@ class OverlayWindow(QWidget):
         state_machine.state_changed.connect(window.on_state_changed)
         window.show()
     """
+
+    style_changed = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -91,6 +93,30 @@ class OverlayWindow(QWidget):
         self._text_label.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self._text_label, stretch=1)
 
+        # 风格下拉框
+        self._style_combo = QComboBox()
+        self._style_combo.setStyleSheet("""
+            QComboBox {
+                background: #313244;
+                color: #cdd6f4;
+                border: 1px solid #585b70;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+                min-width: 72px;
+            }
+            QComboBox::drop-down { border: none; }
+            QComboBox QAbstractItemView {
+                background: #313244;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                selection-background-color: #45475a;
+            }
+        """)
+        self._style_combo.setVisible(False)
+        self._style_combo.currentTextChanged.connect(self._on_style_changed)
+        layout.addWidget(self._style_combo)
+
         # 确认按钮
         self._btn_confirm = QPushButton("确认")
         self._btn_confirm.setStyleSheet(_button_style(BTN_CONFIRM_BG, BTN_CONFIRM_TEXT))
@@ -117,14 +143,44 @@ class OverlayWindow(QWidget):
     def set_text(self, text: str):
         self._text_label.setText(text)
 
-    def text(self) -> str:
+    def current_text(self) -> str:
+        """获取当前文本（避免与 QWidget.text() 冲突）"""
         return self._text_label.text()
+
+    def _on_style_changed(self, style_name: str):
+        if style_name:
+            self.style_changed.emit(style_name)
+
+    def load_styles(self, style_names: list[str]):
+        """加载风格列表到下拉框（从数据库）"""
+        current = self._style_combo.currentText()
+        self._style_combo.blockSignals(True)
+        self._style_combo.clear()
+        self._style_combo.addItems(style_names)
+        self._style_combo.addItem("原文")
+        if current and current in style_names:
+            self._style_combo.setCurrentText(current)
+        self._style_combo.blockSignals(False)
+
+    def set_polishing_state(self, polishing: bool):
+        """设置润色中状态"""
+        if polishing:
+            self._status_label.setText("润色中")
+            self._style_combo.setEnabled(False)
+            self._btn_confirm.setEnabled(False)
+            self._btn_cancel.setEnabled(False)
+        else:
+            self._status_label.setText("完成")
+            self._style_combo.setEnabled(True)
+            self._btn_confirm.setEnabled(True)
+            self._btn_cancel.setEnabled(True)
 
     def on_state_changed(self, new_state: AppState, _old_state: AppState):
         """接收状态机信号, 更新面板显隐和 UI"""
         self._indicator.on_state_changed(new_state, _old_state)
 
         if new_state == AppState.IDLE:
+            self._style_combo.setVisible(False)
             self.hide()
             return
 
@@ -145,13 +201,14 @@ class OverlayWindow(QWidget):
             self.show()
 
         elif new_state == AppState.PREVIEW:
-            self._status_label.setText("完成")
+            self._status_label.setText("润色中")
+            self._style_combo.setVisible(True)
+            self._style_combo.setEnabled(False)
             self._btn_confirm.setVisible(True)
+            self._btn_confirm.setEnabled(False)
             self._btn_cancel.setVisible(True)
+            self._btn_cancel.setEnabled(False)
             self._btn_cancel.setText("取消")
-            self._btn_confirm.raise_()
-            self._btn_cancel.raise_()
-            self.repaint()
             self.show()
 
         elif new_state == AppState.ERROR:

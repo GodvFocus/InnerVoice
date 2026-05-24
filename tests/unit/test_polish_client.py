@@ -80,9 +80,52 @@ class TestPolishClient:
             assert call_kwargs["temperature"] == 0.3
             assert len(call_kwargs["messages"]) == 2
             assert call_kwargs["messages"][0]["role"] == "system"
-            assert call_kwargs["messages"][0]["content"] == "系统提示词"
+            assert call_kwargs["messages"][0]["content"].startswith("系统提示词")
+            assert "只返回润色后的最终文本" in call_kwargs["messages"][0]["content"]
             assert call_kwargs["messages"][1]["role"] == "user"
             assert call_kwargs["messages"][1]["content"] == "口语文本"
+
+    def test_extract_text_from_content_parts(self, client, qtbot):
+        with patch("modules.polish.polish_client.OpenAI") as mock_openai:
+            mock_client = MagicMock()
+            mock_completion = MagicMock()
+            mock_completion.choices = [MagicMock()]
+            mock_completion.choices[0].message.content = [
+                {"type": "text", "text": "第一段"},
+                {"type": "text", "text": "第二段"},
+            ]
+            mock_client.chat.completions.create.return_value = mock_completion
+            mock_openai.return_value = mock_client
+
+            results = []
+            client.result_ready.connect(lambda r: results.append(r))
+            client.polish("文本", "提示词", "k", "u", "m")
+
+            with qtbot.waitSignal(client.result_ready, timeout=3000):
+                pass
+
+            assert results == ["第一段第二段"]
+
+    def test_fallback_to_raw_text_on_parse_error(self, client, qtbot):
+        with patch("modules.polish.polish_client.OpenAI") as mock_openai:
+            mock_client = MagicMock()
+            mock_completion = MagicMock()
+            mock_completion.choices = [MagicMock()]
+            mock_completion.choices[0].message.content = None
+            mock_client.chat.completions.create.return_value = mock_completion
+            mock_openai.return_value = mock_client
+
+            results = []
+            errors = []
+            client.result_ready.connect(lambda r: results.append(r))
+            client.error_occurred.connect(lambda e: errors.append(e))
+            client.polish("原始输入", "提示词", "k", "u", "m")
+
+            with qtbot.waitSignal(client.result_ready, timeout=3000):
+                pass
+
+            assert results == ["原始输入"]
+            assert errors == []
 
     def test_error_signal_on_exception(self, client, qtbot):
         with patch("modules.polish.polish_client.OpenAI") as mock_openai:
