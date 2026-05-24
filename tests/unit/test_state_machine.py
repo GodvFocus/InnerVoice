@@ -1,4 +1,4 @@
-"""状态机单元测试 — 4 状态模型"""
+"""状态机单元测试 - 5 状态模型"""
 
 import sys
 from pathlib import Path
@@ -33,12 +33,20 @@ class TestStateMachine:
 
     def test_listening_to_preview(self, sm):
         sm.transition(AppState.LISTENING)
+        ok = sm.transition(AppState.PROCESSING)
+        assert ok is True
+        assert sm.current_state == AppState.PROCESSING
+
+    def test_processing_to_preview(self, sm):
+        sm.transition(AppState.LISTENING)
+        sm.transition(AppState.PROCESSING)
         ok = sm.transition(AppState.PREVIEW)
         assert ok is True
         assert sm.current_state == AppState.PREVIEW
 
     def test_preview_to_idle(self, sm):
         sm.transition(AppState.LISTENING)
+        sm.transition(AppState.PROCESSING)
         sm.transition(AppState.PREVIEW)
         ok = sm.transition(AppState.IDLE)
         assert ok is True
@@ -80,6 +88,7 @@ class TestStateMachine:
 
     def test_preview_to_error(self, sm):
         sm.transition(AppState.LISTENING)
+        sm.transition(AppState.PROCESSING)
         sm.transition(AppState.PREVIEW)
         ok = sm.transition(AppState.ERROR)
         assert ok is True

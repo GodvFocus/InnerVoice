@@ -1,19 +1,20 @@
 """讯飞语音听写(流式版) IAT WebSocket 客户端"""
 
 import base64
-import datetime
 import hashlib
 import hmac
 import json
 import threading
-import uuid
+from datetime import datetime, timezone
+from email.utils import format_datetime
+from urllib.parse import urlencode, urlparse
 
 import websocket
 
 from PySide6.QtCore import QObject, Signal
 
 
-# IAT WebSocket 地址
+# IAT WebSocket 地址 (官方推荐端点)
 IAT_URL = "wss://iat-api.xfyun.cn/v2/iat"
 HOST = "iat-api.xfyun.cn"
 URI = "/v2/iat"
@@ -52,6 +53,7 @@ class IATClient(QObject):
         self._ws: websocket.WebSocketApp | None = None
         self._thread: threading.Thread | None = None
         self._running = False
+        self._segments: list[str] = []
 
     @property
     def is_connected(self) -> bool:
@@ -61,16 +63,22 @@ class IATClient(QObject):
         """建立 WebSocket 连接并握手"""
         if self._running:
             return
-        url = self._build_url()
+        self._reset_session()
+        url, headers, host = self._build_request()
         self._running = True
         self._ws = websocket.WebSocketApp(
             url,
+            header=headers,
             on_open=self._on_open,
             on_message=self._on_message,
             on_error=self._on_error,
             on_close=self._on_close,
         )
-        self._thread = threading.Thread(target=self._ws.run_forever, daemon=True)
+        self._thread = threading.Thread(
+            target=self._run_websocket,
+            args=(host,),
+            daemon=True,
+        )
         self._thread.start()
 
     def send_audio(self, data: bytes):
@@ -156,12 +164,13 @@ class IATClient(QObject):
 
         data = result.get("data", {})
         status = data.get("status", 0)
-        text = self._extract_text(data)
+        text = self._merge_result(data)
 
         if status == 1:
             self.partial_result.emit(text)
         elif status == 2:
             self.final_result.emit(text)
+            self.disconnect()
 
     def _on_error(self, ws, error):
         self.error_occurred.emit(f"WebSocket 错误: {error}")
@@ -172,16 +181,28 @@ class IATClient(QObject):
 
     # --- 签名 & URL 构建 ---
 
-    def _build_url(self) -> str:
-        """构建带鉴权签名的 WebSocket URL"""
-        now = datetime.datetime.now(datetime.timezone.utc)
-        date_str = now.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    def _run_websocket(self, host: str):
+        """以与签名一致的 Host 头发起握手，避免网关校验失败"""
+        if self._ws is None:
+            return
+        self._ws.run_forever(host=host)
 
-        # HMAC-SHA256 签名
+    def _build_url(self) -> str:
+        """构建带鉴权签名的 WebSocket URL, 与官方 SDK 完全一致"""
+        url, _, _ = self._build_request()
+        return url
+
+    def _build_request(self) -> tuple[str, list[str], str]:
+        """构建鉴权 URL 和握手头，确保签名内容与实际请求一致"""
+        parsed = urlparse(IAT_URL)
+        host = parsed.netloc
+        uri = parsed.path or "/"
+        date_str = format_datetime(datetime.now(timezone.utc), usegmt=True)
+
         signature_origin = (
-            f"host: {HOST}\n"
+            f"host: {host}\n"
             f"date: {date_str}\n"
-            f"GET {URI} HTTP/1.1"
+            f"GET {uri} HTTP/1.1"
         )
         signature = base64.b64encode(
             hmac.new(
@@ -191,28 +212,33 @@ class IATClient(QObject):
             ).digest()
         ).decode("utf-8")
 
-        # authorization 头
+        # authorization 头 (逗号后必须有空格, 与官方 SDK 格式一致)
         authorization_origin = (
-            f'api_key="{self._apikey}",'
-            f'algorithm="hmac-sha256",'
-            f'headers="host date request-line",'
-            f'signature="{signature}"'
+            'api_key="{}", algorithm="{}", headers="{}", signature="{}"'.format(
+                self._apikey, "hmac-sha256", "host date request-line", signature
+            )
         )
         authorization = base64.b64encode(
             authorization_origin.encode("utf-8")
         ).decode("utf-8")
 
         # 拼接 URL
-        from urllib.parse import urlencode
         params = urlencode({
             "authorization": authorization,
             "date": date_str,
-            "host": HOST,
+            "host": host,
         })
-        return f"{IAT_URL}?{params}"
+        headers = [
+            f"Host: {host}",
+            f"Date: {date_str}",
+        ]
+        return f"{IAT_URL}?{params}", headers, host
+
+    def _reset_session(self):
+        self._segments = []
 
     def _extract_text(self, data: dict) -> str:
-        """从返回数据中提取识别文本"""
+        """从返回数据中提取当前帧识别文本"""
         result = data.get("result", {})
         ws_list = result.get("ws", [])
         words = []
@@ -223,3 +249,26 @@ class IATClient(QObject):
                 if w:
                     words.append(w)
         return "".join(words)
+
+    def _merge_result(self, data: dict) -> str:
+        """按讯飞 wpgs 增量协议拼接最终文本。"""
+        result = data.get("result", {})
+        text = self._extract_text(data)
+        if not text and not self._segments:
+            return ""
+
+        pgs = result.get("pgs")
+        if pgs == "rpl":
+            rg = result.get("rg", [])
+            if len(rg) == 2:
+                start = max(rg[0] - 1, 0)
+                end = max(rg[1], start)
+                while len(self._segments) < end:
+                    self._segments.append("")
+                self._segments[start:end] = [text]
+            else:
+                self._segments.append(text)
+        else:
+            self._segments.append(text)
+
+        return "".join(self._segments)

@@ -1,6 +1,7 @@
 """配置管理 - JSON 文件读写, 带默认值, 支持 local.json 覆盖"""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ DEFAULTS = {
 }
 
 CONFIG_FILENAME = "settings.json"
+DEFAULT_CONFIG_FILENAME = "default_settings.json"
 LOCAL_CONFIG_FILENAME = "settings.local.json"
 
 
@@ -33,12 +35,14 @@ class Settings:
         if config_dir is None:
             config_dir = Path(__file__).parent.parent.parent.parent / "configs"
         self._config_dir = Path(config_dir)
+        self._default_config_path = self._config_dir / DEFAULT_CONFIG_FILENAME
         self._config_path = self._config_dir / CONFIG_FILENAME
         self._local_config_path = self._config_dir / LOCAL_CONFIG_FILENAME
-        self._data: dict[str, Any] = dict(DEFAULTS)
+        self._data: dict[str, Any] = deepcopy(DEFAULTS)
         self._load()
 
     def _load(self):
+        self._load_file(self._default_config_path)
         self._load_file(self._config_path)
         self._load_file(self._local_config_path)
 
@@ -47,9 +51,16 @@ class Settings:
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     stored = json.load(f)
-                self._data.update(stored)
+                self._deep_merge(self._data, stored)
             except (json.JSONDecodeError, OSError):
                 pass
+
+    def _deep_merge(self, base: dict[str, Any], override: dict[str, Any]):
+        for key, value in override.items():
+            if isinstance(value, dict) and isinstance(base.get(key), dict):
+                self._deep_merge(base[key], value)
+            else:
+                base[key] = value
 
     def save(self):
         self._config_dir.mkdir(parents=True, exist_ok=True)
@@ -63,4 +74,4 @@ class Settings:
         self._data[key] = value
 
     def all(self) -> dict[str, Any]:
-        return dict(self._data)
+        return deepcopy(self._data)

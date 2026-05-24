@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
@@ -17,7 +18,6 @@ if _app is None:
 from modules.asr.iat_client import IATClient
 
 
-# 模拟返回数据
 PARTIAL_MSG = json.dumps({
     "code": 0,
     "message": "success",
@@ -25,7 +25,7 @@ PARTIAL_MSG = json.dumps({
     "data": {
         "status": 1,
         "result": {
-            "ws": [{"cw": [{"w": "今天"}, {"w": "天气"}]}],
+            "ws": [{"cw": [{"w": "今天天气"}]}],
         },
     },
 })
@@ -42,10 +42,35 @@ FINAL_MSG = json.dumps({
     },
 })
 
+WPGS_APPEND_MSG = json.dumps({
+    "code": 0,
+    "message": "success",
+    "sid": "test-sid",
+    "data": {
+        "status": 1,
+        "result": {
+            "pgs": "apd",
+            "ws": [{"cw": [{"w": "你好"}]}],
+        },
+    },
+})
+
+WPGS_REPLACE_MSG = json.dumps({
+    "code": 0,
+    "message": "success",
+    "sid": "test-sid",
+    "data": {
+        "status": 2,
+        "result": {
+            "pgs": "rpl",
+            "rg": [1, 1],
+            "ws": [{"cw": [{"w": "你好。"}]}],
+        },
+    },
+})
+
 
 class TestIATClient:
-    """IATClient 测试 (mock WebSocket)"""
-
     @pytest.fixture
     def client(self):
         return IATClient("test_appid", "test_apikey", "test_apisecret")
@@ -60,6 +85,15 @@ class TestIATClient:
         assert "date=" in url
         assert "host=" in url
 
+    def test_build_request_keeps_signed_host_consistent(self, client):
+        url, headers, host = client._build_request()
+        query = parse_qs(urlparse(url).query)
+
+        assert host == "iat-api.xfyun.cn"
+        assert query["host"] == [host]
+        assert f"Host: {host}" in headers
+        assert any(header.startswith("Date: ") for header in headers)
+
     def test_extract_text_partial(self, client):
         data = json.loads(PARTIAL_MSG)["data"]
         text = client._extract_text(data)
@@ -70,6 +104,13 @@ class TestIATClient:
         text = client._extract_text(data)
         assert text == ""
 
+    def test_merge_result_supports_wpgs_replace(self, client):
+        first = json.loads(WPGS_APPEND_MSG)["data"]
+        second = json.loads(WPGS_REPLACE_MSG)["data"]
+
+        assert client._merge_result(first) == "你好"
+        assert client._merge_result(second) == "你好。"
+
     @patch("modules.asr.iat_client.websocket.WebSocketApp")
     def test_connect_and_disconnect(self, mock_ws_app, client):
         mock_ws = MagicMock()
@@ -77,6 +118,11 @@ class TestIATClient:
 
         client.connect()
         assert client.is_connected is True
+        mock_ws_app.assert_called_once()
+
+        _, kwargs = mock_ws_app.call_args
+        assert "header" in kwargs
+        assert "Host: iat-api.xfyun.cn" in kwargs["header"]
 
         client.disconnect()
         assert client.is_connected is False
@@ -102,11 +148,10 @@ class TestIATClient:
         client.partial_result.connect(lambda t: results.append(t))
 
         client._on_message(None, PARTIAL_MSG)
-        assert len(results) == 1
-        assert results[0] == "今天天气"
+        assert results == ["今天天气"]
 
     @patch("modules.asr.iat_client.websocket.WebSocketApp")
-    def test_on_message_emits_final_result(self, mock_ws_app, client):
+    def test_on_message_emits_final_result_and_disconnects(self, mock_ws_app, client):
         mock_ws = MagicMock()
         mock_ws_app.return_value = mock_ws
         client.connect()
@@ -115,8 +160,8 @@ class TestIATClient:
         client.final_result.connect(lambda t: results.append(t))
 
         client._on_message(None, FINAL_MSG)
-        assert len(results) == 1
-        assert results[0] == "今天天气不错"
+        assert results == ["今天天气不错"]
+        assert client.is_connected is False
 
     @patch("modules.asr.iat_client.websocket.WebSocketApp")
     def test_on_error(self, mock_ws_app, client):

@@ -62,6 +62,7 @@ class TestHotkeyManager:
         hm.asr_stop_requested.connect(lambda: signals.append("stop"))
         hm._on_release()
         assert len(signals) == 1
+        assert sm.current_state == AppState.PROCESSING
 
     def test_short_press_no_trigger(self, sm, settings):
         hm = HotkeyManager(sm, settings)
@@ -78,13 +79,22 @@ class TestHotkeyManager:
     def test_esc_in_preview_triggers_idle(self, sm, settings):
         hm = HotkeyManager(sm, settings)
         sm.transition(AppState.LISTENING)
+        sm.transition(AppState.PROCESSING)
         sm.transition(AppState.PREVIEW)
+        hm._on_esc()
+        assert sm.current_state == AppState.IDLE
+
+    def test_esc_in_processing_triggers_idle(self, sm, settings):
+        hm = HotkeyManager(sm, settings)
+        sm.transition(AppState.LISTENING)
+        sm.transition(AppState.PROCESSING)
         hm._on_esc()
         assert sm.current_state == AppState.IDLE
 
     def test_enter_in_preview_confirms_and_goes_idle(self, sm, settings):
         hm = HotkeyManager(sm, settings)
         sm.transition(AppState.LISTENING)
+        sm.transition(AppState.PROCESSING)
         sm.transition(AppState.PREVIEW)
         hm._on_enter()
         assert sm.current_state == AppState.IDLE

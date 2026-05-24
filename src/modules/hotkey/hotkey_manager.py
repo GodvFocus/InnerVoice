@@ -19,7 +19,7 @@ class HotkeyManager(QObject):
         长按右 Ctrl (> threshold_ms) -> 唤起录音 (LISTENING)
         松开右 Ctrl -> 结束录音, 等待最终结果
         Enter -> 确认注入 (仅在 PREVIEW 状态)
-        Escape -> 取消 (LISTENING / PREVIEW 状态)
+        Escape -> 取消 (LISTENING / PROCESSING / PREVIEW 状态)
     """
 
     text_confirmed = Signal(str)    # 用户确认后的文本
@@ -89,6 +89,7 @@ class HotkeyManager(QObject):
             self._press_timer.cancel()
             self._press_timer = None
         if self._sm.current_state == AppState.LISTENING:
+            self._sm.transition(AppState.PROCESSING)
             self.asr_stop_requested.emit()
 
     def _on_long_press_timeout(self):
@@ -103,5 +104,5 @@ class HotkeyManager(QObject):
             self._sm.transition(AppState.IDLE)
 
     def _on_esc(self):
-        if self._sm.current_state in (AppState.PREVIEW, AppState.LISTENING):
+        if self._sm.current_state in (AppState.PREVIEW, AppState.PROCESSING, AppState.LISTENING):
             self._sm.transition(AppState.IDLE)

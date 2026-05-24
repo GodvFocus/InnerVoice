@@ -1,7 +1,6 @@
 """配置管理模块测试"""
 
 import json
-import os
 import tempfile
 from pathlib import Path
 
@@ -54,3 +53,56 @@ class TestSettings:
         # 其他默认值应该还在
         assert settings2.get("panel_width") == 480
         assert settings2.get("hotkey") == "ctrl+shift+v"
+
+    def test_loads_default_settings_file(self, temp_config_dir):
+        (temp_config_dir / "default_settings.json").write_text(
+            json.dumps({
+                "panel_width": 720,
+                "asr": {
+                    "appid": "demo-appid",
+                    "apikey": "demo-apikey",
+                    "apisecret": "demo-secret",
+                },
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        settings = Settings(config_dir=temp_config_dir)
+        asr = settings.get("asr")
+
+        assert settings.get("panel_width") == 720
+        assert asr["appid"] == "demo-appid"
+        assert asr["apikey"] == "demo-apikey"
+        assert asr["apisecret"] == "demo-secret"
+        assert asr["language"] == "zh_cn"
+
+    def test_nested_asr_config_is_deep_merged(self, temp_config_dir):
+        (temp_config_dir / "default_settings.json").write_text(
+            json.dumps({
+                "asr": {
+                    "appid": "demo-appid",
+                    "apikey": "demo-apikey",
+                    "apisecret": "demo-secret",
+                    "language": "zh_cn",
+                    "accent": "mandarin",
+                },
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (temp_config_dir / "settings.json").write_text(
+            json.dumps({
+                "asr": {
+                    "language": "en_us",
+                },
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        settings = Settings(config_dir=temp_config_dir)
+        asr = settings.get("asr")
+
+        assert asr["appid"] == "demo-appid"
+        assert asr["apikey"] == "demo-apikey"
+        assert asr["apisecret"] == "demo-secret"
+        assert asr["language"] == "en_us"
+        assert asr["accent"] == "mandarin"

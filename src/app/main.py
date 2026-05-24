@@ -41,6 +41,7 @@ def main():
 
     asr_config = settings.get("asr")
     audio_capture = AudioCapture()
+    target_window: int | None = None
     iat_client = IATClient(
         appid=asr_config["appid"],
         apikey=asr_config["apikey"],
@@ -61,6 +62,8 @@ def main():
 
     # 绑定: IATClient 最终结果 -> PREVIEW 状态
     def on_final_result(text: str):
+        audio_capture.stop()
+        iat_client.disconnect()
         overlay.set_text(text)
         state_machine.transition(AppState.PREVIEW)
 
@@ -69,7 +72,9 @@ def main():
     # 绑定: 错误处理
     def on_asr_error(msg: str):
         print(f"[ASR Error] {msg}")
-        if state_machine.current_state == AppState.LISTENING:
+        if state_machine.current_state in (AppState.LISTENING, AppState.PROCESSING):
+            audio_capture.stop()
+            iat_client.disconnect()
             overlay.set_text(msg)
             state_machine.transition(AppState.ERROR)
 
@@ -86,22 +91,38 @@ def main():
 
     # 绑定: 确认 -> 文本注入
     def on_confirm(text: str):
-        TextInjector.inject(text)
+        nonlocal target_window
+        if TextInjector.inject_to_window(text, target_window):
+            target_window = None
 
     hotkey_manager.set_text_getter(overlay.text)
     hotkey_manager.text_confirmed.connect(on_confirm)
 
     # 绑定: ASR 资源清理 (在状态退回 IDLE 时统一执行)
     def on_cleanup(new_state: AppState, old_state: AppState):
-        if new_state == AppState.IDLE and old_state == AppState.LISTENING:
+        nonlocal target_window
+        if new_state == AppState.IDLE and old_state in (AppState.LISTENING, AppState.PROCESSING):
             audio_capture.stop()
             iat_client.disconnect()
+        if new_state == AppState.IDLE:
+            target_window = None
+            overlay.set_text("")
 
     state_machine.state_changed.connect(on_cleanup)
 
+    # 在开始录音前记录当前输入窗口，确认时恢复焦点后再粘贴
+    def on_asr_start():
+        nonlocal target_window
+        target_window = TextInjector.current_window()
+
+    hotkey_manager.asr_start_requested.connect(on_asr_start)
+
     # 按钮: 只做状态转换, 资源清理由 on_cleanup 统一处理
     overlay.confirm_button().clicked.connect(
-        lambda: on_confirm(overlay.text())
+        lambda: (
+            on_confirm(overlay.text()),
+            state_machine.transition(AppState.IDLE),
+        )
     )
     overlay.cancel_button().clicked.connect(
         lambda: state_machine.transition(AppState.IDLE)

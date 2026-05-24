@@ -1,10 +1,9 @@
 """悬浮窗主窗口 - 无边框、置顶、底部居中的横向底栏"""
 
 from PySide6.QtCore import Qt, QPoint
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QApplication,
-    QGraphicsDropShadowEffect,
 )
 
 from shared.types.enums import AppState
@@ -52,23 +51,20 @@ class OverlayWindow(QWidget):
         super().__init__()
         self._setup_window()
         self._setup_ui()
-        self._setup_shadow()
 
     def _setup_window(self):
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool
-            | Qt.WindowType.NoDropShadowWindowHint
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setFixedSize(PANEL_WIDTH, PANEL_HEIGHT)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(f"""
             QWidget {{
                 background-color: {BG_COLOR};
                 border-radius: 8px;
+                border: 1px solid {BTN_CANCEL_BORDER};
             }}
         """)
 
@@ -110,13 +106,6 @@ class OverlayWindow(QWidget):
         self._btn_cancel.setVisible(False)
         layout.addWidget(self._btn_cancel)
 
-    def _setup_shadow(self):
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 120))
-        self.setGraphicsEffect(shadow)
-
     # --- 公开接口 ---
 
     def confirm_button(self) -> QPushButton:
@@ -148,11 +137,21 @@ class OverlayWindow(QWidget):
             self._btn_cancel.setText("取消")
             self.show()
 
+        elif new_state == AppState.PROCESSING:
+            self._status_label.setText("识别中")
+            self._btn_confirm.setVisible(False)
+            self._btn_cancel.setVisible(True)
+            self._btn_cancel.setText("取消")
+            self.show()
+
         elif new_state == AppState.PREVIEW:
             self._status_label.setText("完成")
             self._btn_confirm.setVisible(True)
             self._btn_cancel.setVisible(True)
             self._btn_cancel.setText("取消")
+            self._btn_confirm.raise_()
+            self._btn_cancel.raise_()
+            self.repaint()
             self.show()
 
         elif new_state == AppState.ERROR:
