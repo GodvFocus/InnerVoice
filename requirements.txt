@@ -1,0 +1,8 @@
+keyboard==0.13.5
+PyAudio==0.2.14
+pyside6==6.11.1
+pyside6_addons==6.11.1
+pyside6_essentials==6.11.1
+pytest==9.0.3
+pywin32==311
+websocket_client==1.9.0
