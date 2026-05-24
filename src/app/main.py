@@ -12,8 +12,10 @@
 
 import sys
 import signal
+import ctypes
 from pathlib import Path
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
 
@@ -32,10 +34,29 @@ from shared.types.enums import AppState
 from ui.main_window import MainWindow
 
 
+def _configure_windows_taskbar_identity() -> None:
+    """Bind the process to a stable AppUserModelID so the taskbar uses the app icon."""
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "InnerVoice.DesktopApp"
+        )
+    except (AttributeError, OSError):
+        pass
+
+
 def main():
+    _configure_windows_taskbar_identity()
     app = QApplication(sys.argv)
-    app.setApplicationName("InnerVoice")
+    app.setApplicationName("Flow")
     app.setQuitOnLastWindowClosed(False)
+
+    icon_path = Path(__file__).resolve().parents[2] / "assets" / "app-icon.png"
+    app_icon = QIcon(str(icon_path))
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
+
 
     # 模块初始化
     settings = Settings()
@@ -45,7 +66,7 @@ def main():
         data_dir = Path(__file__).parent.parent.parent / "data"
         db_path = init_db(data_dir)
         prompt_manager = PromptManager(db_path)
-        main_window = MainWindow(prompt_manager)
+        main_window = MainWindow(prompt_manager, app_icon=app_icon)
         main_window.show()
     except Exception as e:
         from PySide6.QtWidgets import QMessageBox
