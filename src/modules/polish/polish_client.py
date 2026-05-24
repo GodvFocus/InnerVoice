@@ -37,7 +37,7 @@ class PolishWorker(QObject):
                 timeout=30.0,
             )
             result = response.choices[0].message.content
-            self.result_ready.emit(result.strip())
+            self.result_ready.emit((result or "").strip())
         except Exception as e:
             self.error_occurred.emit(str(e))
 
@@ -99,5 +99,7 @@ class PolishClient(QObject):
             self._worker = None
         if self._thread:
             self._thread.quit()
-            self._thread.wait(1000)
-            self._thread = None
+            self._thread.finished.connect(self._on_thread_finished)
+
+    def _on_thread_finished(self):
+        self._thread = None
