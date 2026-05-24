@@ -4,63 +4,51 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-一个面向 Windows 桌面的轻量级语音输入原型。
+`InnerVoice` 是一个面向 Windows 桌面的语音输入原型。它的目标不是单纯“把语音识别成文本”，而是把“按下热键开始说话 -> 实时预览 -> 确认后注入到当前输入窗口”这条链路打通，形成一个可运行、可演示、可继续迭代的 MVP。
 
-`InnerVoice` 试图把“语音转写工具”再往前推一步：不是只把语音变成文本，而是打通完整输入闭环。长按全局热键开始说话，实时看到转写内容，确认后直接把文本注入你刚刚正在输入的应用里。
-
-当前仓库是一个可运行、可演示、可继续迭代的 MVP，重点解决以下链路：
+当前版本已经覆盖以下核心流程：
 
 - 全局热键唤起
-- 实时录音与流式转写
-- 悬浮预览与状态反馈
-- 跨应用文本注入
+- 麦克风录音与流式语音识别
+- 悬浮状态栏实时预览
+- 最终文本确认/取消
+- 恢复目标窗口焦点并注入文本
 
-## Preview
+## Current Status
 
-### Demo GIF
+这是一个桌面原型，不是生产就绪产品。当前仓库更适合作为：
 
-把演示 GIF 放到 `docs/images/demo.gif` 后，这里会自动显示：
+- 语音输入法交互链路验证
+- Windows 桌面语音输入 MVP
+- 后续离线 ASR、UI 打磨、打包发布的基础工程
 
-```md
-![InnerVoice Demo](./docs/images/demo.gif)
-```
+## Features
 
-当前占位：
+- 默认长按 `Right Ctrl` 触发录音
+- 使用 `PyAudio` 采集 16kHz 单声道 PCM 音频
+- 使用讯飞 IAT WebSocket 进行流式语音识别
+- 使用 `PySide6` 显示底部悬浮状态栏
+- 实时显示中间识别结果和最终结果
+- 识别完成后支持确认或取消
+- 通过剪贴板 + `Ctrl+V` 将文本注入目标应用
+- 注入前记录并恢复目标窗口焦点
+- 为状态机、配置、热键、注入、ASR 关键逻辑提供单元测试
 
-> Demo GIF placeholder: `docs/images/demo.gif`
-
-### Typical Flow
+## Typical Flow
 
 ```text
 Long press Right Ctrl
   -> start listening
-  -> stream audio to iFlytek IAT
+  -> connect to iFlytek IAT
+  -> stream microphone audio
   -> show partial transcript
-  -> release key to finish
-  -> preview final text
-  -> press Enter to inject
+Release Right Ctrl
+  -> stop recording
+  -> wait for final transcript
+Preview final text
+  -> Enter / click Confirm to inject
+  -> Esc / click Cancel to abort
 ```
-
-## Why This Project
-
-桌面端的语音输入常见问题不是“不能识别”，而是“不能真正输入”：
-
-- 只能在单个应用里用
-- 识别结果出来后还得手动复制粘贴
-- 没有明确状态反馈，容易误触或误注入
-
-`InnerVoice` 的目标很直接：让语音输入像一个真正的系统级输入动作，而不是孤立的转写面板。
-
-## Features
-
-- 全局热键触发，默认长按 `Right Ctrl`
-- 基于 `PyAudio` 的 16kHz 单声道麦克风采集
-- 基于讯飞 IAT WebSocket 的流式语音识别
-- 基于 `PySide6` 的悬浮状态面板
-- 实时显示中间识别结果与最终结果
-- 恢复目标窗口焦点后自动粘贴文本
-- 明确的状态机设计，便于扩展与调试
-- 已覆盖核心模块的单元测试
 
 ## Architecture
 
@@ -68,13 +56,11 @@ Long press Right Ctrl
 flowchart LR
     A["Global Hotkey"] --> B["HotkeyManager"]
     B --> C["StateMachine"]
-    C --> D["IATClient.connect()"]
+    C --> D["IATClient"]
     D --> E["AudioCapture"]
-    E --> F["iFlytek IAT WebSocket"]
-    F --> G["Partial / Final Transcript"]
-    G --> H["OverlayWindow"]
-    H --> I["TextInjector"]
-    I --> J["Target Input Window"]
+    D --> F["OverlayWindow"]
+    F --> G["TextInjector"]
+    G --> H["Target Input Window"]
 ```
 
 ## State Flow
@@ -96,30 +82,30 @@ stateDiagram-v2
 
 状态说明：
 
-- `IDLE`: 空闲，面板隐藏
-- `LISTENING`: 录音中，显示实时转写
-- `PROCESSING`: 已停止录音，等待最终结果
-- `PREVIEW`: 展示最终文本，支持确认或取消
-- `ERROR`: 出错，显示关闭入口
+- `IDLE`：空闲状态，悬浮窗隐藏
+- `LISTENING`：正在录音，显示实时识别结果
+- `PROCESSING`：已停止录音，等待最终识别结果
+- `PREVIEW`：展示最终文本，等待确认或取消
+- `ERROR`：识别或设备异常，等待关闭并回到空闲状态
 
 ## Project Structure
 
 ```text
 InnerVoice/
-├─ assets/                 # 图标、音效等静态资源
-├─ configs/                # 默认配置、用户配置、本地覆盖配置
-├─ docs/                   # 设计与计划文档
-├─ scripts/                # 预留脚本目录
+├─ assets/                  # 图标等静态资源
+├─ configs/                 # 默认配置、共享配置、本地覆盖配置
+├─ docs/                    # 设计文档与计划
+├─ scripts/                 # 预留脚本目录
 ├─ src/
-│  ├─ app/                 # 应用入口与启动编排
-│  ├─ core/config/         # 配置加载与深度合并
+│  ├─ app/                  # 应用入口
+│  ├─ core/config/          # 配置加载与深度合并
 │  ├─ modules/
-│  │  ├─ asr/              # 录音采集、讯飞 IAT 客户端
-│  │  ├─ hotkey/           # 全局热键管理
-│  │  ├─ injector/         # 文本注入
-│  │  └─ overlay/          # 悬浮窗、状态机、状态指示器
-│  └─ shared/types/        # 共享枚举与类型
-└─ tests/unit/             # 单元测试
+│  │  ├─ asr/               # 录音采集与讯飞 IAT 客户端
+│  │  ├─ hotkey/            # 全局热键管理
+│  │  ├─ injector/          # 文本注入
+│  │  └─ overlay/           # 悬浮窗、状态机、状态指示
+│  └─ shared/types/         # 共享枚举与类型
+└─ tests/unit/              # 单元测试
 ```
 
 ## Tech Stack
@@ -131,6 +117,21 @@ InnerVoice/
 - keyboard
 - pywin32
 - pytest
+
+## Requirements
+
+运行环境要求：
+
+- Windows 10 或更高版本
+- Python 3.10 及以上
+- 可用麦克风设备
+- 讯飞开放平台 IAT 凭据
+
+当前实现显式依赖 Windows 桌面环境，原因包括：
+
+- `keyboard` 负责全局热键监听
+- `pywin32` 负责前台窗口与剪贴板操作
+- 文本注入流程依赖 Windows 输入焦点恢复
 
 ## Quick Start
 
@@ -150,17 +151,15 @@ python -m venv .venv
 
 ### 3. Install dependencies
 
-现在可以直接使用仓库内的 `requirements.txt`：
-
 ```bash
 pip install -r requirements.txt
 ```
 
-如果 `PyAudio` 安装失败，通常是本地音频依赖或 Python 版本兼容问题。这个项目更适合在 Windows 原生 Python 环境中运行。
+如果 `PyAudio` 安装失败，通常是本地音频依赖或 Python 版本兼容问题。这个项目更适合直接在 Windows 原生 Python 环境中运行。
 
 ### 4. Configure ASR credentials
 
-编辑 [`configs/settings.json`](/D:/LearnPython/InnerVoice/configs/settings.json) 或新建 `configs/settings.local.json`，填入讯飞 IAT 凭据：
+编辑 [configs/settings.json](/D:/LearnPython/InnerVoice/configs/settings.json)，或更推荐新建 [configs/settings.local.json](/D:/LearnPython/InnerVoice/configs/settings.local.json)：
 
 ```json
 {
@@ -172,7 +171,7 @@ pip install -r requirements.txt
 }
 ```
 
-更推荐使用 `configs/settings.local.json`，因为 `.gitignore` 已忽略 `*.local.json`。
+推荐使用 `settings.local.json` 保存本机私有凭据，因为 `.gitignore` 已忽略 `*.local.json`。
 
 ### 5. Run
 
@@ -180,16 +179,18 @@ pip install -r requirements.txt
 python src/app/main.py
 ```
 
-默认操作：
+## Default Controls
 
-- 长按 `Right Ctrl`: 开始录音
-- 松开 `Right Ctrl`: 结束录音并等待最终结果
-- `Enter`: 确认注入
-- `Esc`: 取消当前流程
+- 长按 `Right Ctrl`：开始录音
+- 松开 `Right Ctrl`：结束录音并进入识别收尾
+- `Enter`：在预览状态下确认注入
+- `Esc`：取消当前流程
+- 点击悬浮窗 `确认`：注入文本
+- 点击悬浮窗 `取消`：取消流程
 
 ## Configuration
 
-配置合并顺序：
+配置加载顺序如下：
 
 ```text
 DEFAULTS
@@ -198,99 +199,94 @@ DEFAULTS
 -> configs/settings.local.json
 ```
 
-当前默认配置定义在 [`src/core/config/settings.py`](/D:/LearnPython/InnerVoice/src/core/config/settings.py)。
+默认配置定义同时存在于 [configs/default_settings.json](/D:/LearnPython/InnerVoice/configs/default_settings.json) 和 [src/core/config/settings.py](/D:/LearnPython/InnerVoice/src/core/config/settings.py)：
 
-| Key | Default | Status |
+| Key | Default | Current Status |
 | --- | --- | --- |
 | `hotkey` | `right ctrl` | 已接入 |
 | `long_press_threshold_ms` | `300` | 已接入 |
-| `panel_width` | `480` | 已预留，尚未完全接入 UI |
-| `panel_height` | `42` | 已预留，尚未完全接入 UI |
-| `panel_offset_y` | `60` | 已预留，尚未完全接入 UI |
-| `font_size` | `13` | 已预留 |
-| `idle_timeout_seconds` | `30` | 已预留 |
+| `panel_width` | `480` | 已定义，当前 UI 仍使用代码内常量 |
+| `panel_height` | `42` | 已定义，当前 UI 仍使用代码内常量 |
+| `panel_offset_y` | `60` | 已定义，当前 UI 仍使用代码内常量 |
+| `font_size` | `13` | 已定义，当前 UI 仍使用代码内常量字体设置 |
+| `idle_timeout_seconds` | `30` | 已定义，当前未看到实际接入 |
 | `asr.appid` | `""` | 已接入 |
 | `asr.apikey` | `""` | 已接入 |
 | `asr.apisecret` | `""` | 已接入 |
-| `asr.language` | `zh_cn` | 已预留，当前客户端内部仍写死普通话 |
-| `asr.accent` | `mandarin` | 已预留，当前客户端内部仍写死普通话 |
+| `asr.language` | `zh_cn` | 已定义，当前 IAT 客户端内仍写死为 `zh_cn` |
+| `asr.accent` | `mandarin` | 已定义，当前 IAT 客户端内仍写死为 `mandarin` |
 
 ## Testing
 
-运行测试：
+运行单元测试：
 
 ```bash
 pytest tests/unit -q
 ```
 
-当前测试覆盖：
+当前测试主要覆盖：
 
-- `Settings` 配置加载与深度合并
-- `StateMachine` 状态迁移
-- `HotkeyManager` 长按、释放、确认、取消逻辑
-- `AudioCapture` 录音采集流程
-- `IATClient` 签名、请求与结果解析逻辑
-- `TextInjector` 剪贴板保存/恢复与注入逻辑
+- `Settings`：配置加载与深度合并
+- `StateMachine`：状态切换规则
+- `HotkeyManager`：长按、释放、确认、取消逻辑
+- `AudioCapture`：录音采集流程
+- `IATClient`：签名、请求、结果拼接逻辑
+- `TextInjector`：剪贴板保存/恢复与注入流程
+
+## Key Entry Points
+
+- [src/app/main.py](/D:/LearnPython/InnerVoice/src/app/main.py)
+- [src/core/config/settings.py](/D:/LearnPython/InnerVoice/src/core/config/settings.py)
+- [src/modules/asr/audio_capture.py](/D:/LearnPython/InnerVoice/src/modules/asr/audio_capture.py)
+- [src/modules/asr/iat_client.py](/D:/LearnPython/InnerVoice/src/modules/asr/iat_client.py)
+- [src/modules/hotkey/hotkey_manager.py](/D:/LearnPython/InnerVoice/src/modules/hotkey/hotkey_manager.py)
+- [src/modules/injector/text_injector.py](/D:/LearnPython/InnerVoice/src/modules/injector/text_injector.py)
+- [src/modules/overlay/overlay_window.py](/D:/LearnPython/InnerVoice/src/modules/overlay/overlay_window.py)
+
+## Known Limitations
+
+- 仅支持 Windows
+- 依赖讯飞 IAT 在线服务
+- 注入方式依赖剪贴板与 `Ctrl+V`，对特殊控件兼容性有限
+- 一部分配置项已经定义，但尚未完整接入运行时 UI / ASR
+- 尚未提供打包、安装器和发布流程
+- 仓库内暂未放入正式演示 GIF 或截图
+
+## Roadmap
+
+- 将 UI 尺寸、偏移、字体等配置真正接入悬浮窗
+- 将 `asr.language` 和 `asr.accent` 改为由配置驱动
+- 补齐异常场景处理与恢复逻辑
+- 改进文本注入兼容性
+- 增加打包与发布方案
+- 补充演示素材与使用截图
 
 ## FAQ
 
-### 1. 为什么这是 Windows only？
+### 为什么现在是 Windows only？
 
-当前项目依赖：
+因为热键监听、前台窗口恢复、剪贴板注入这几块都直接依赖 Windows 生态库和桌面行为模型。
 
-- `keyboard` 的全局热键监听
-- `pywin32` 的前台窗口与剪贴板操作
-- Windows 桌面应用场景下的文本注入方式
+### 为什么使用在线 ASR，而不是离线识别？
 
-所以目前只适合在 Windows 运行。
+当前目标是尽快跑通“完整输入链路”。相比先做离线模型集成，在线 ASR 更适合快速验证桌面交互方案。
 
-### 2. 为什么不用纯离线语音识别？
+### 为什么有些配置项改了没有生效？
 
-当前版本的目标是尽快打通“可演示的输入闭环”。因此识别层优先使用成熟的在线 ASR 服务，而不是先做离线模型集成和优化。
+因为部分配置项虽然已经在设置层定义，但 UI 和 ASR 模块里仍有硬编码常量，README 已在配置表中标明这类字段的接入状态。
 
-### 3. 为什么有些配置项改了没生效？
+### 为什么文本注入使用剪贴板 + Ctrl+V？
 
-因为 `settings.py` 里已经预留了一部分参数，但 UI 和 ASR 侧还没全部接线。README 里已经把这些字段标记为“已预留”。
+这是当前版本里最直接、最稳定、最容易跨应用演示的方案。后续如果要增强兼容性，再考虑更底层的输入注入方式。
 
-### 4. 文本注入为什么用剪贴板 + Ctrl+V？
-
-这是当前版本里最直接、最稳定、最容易跨应用演示的方案。后续如果需要更强的输入兼容性，再考虑更底层或更细粒度的注入方式。
-
-### 5. `settings.json` 和 `settings.local.json` 用哪个？
+### `settings.json` 和 `settings.local.json` 用哪个？
 
 - `settings.json` 适合项目内共享的非敏感配置
 - `settings.local.json` 适合本机私有配置，比如 API 凭据
 
-### 6. 这个项目现在适合拿来直接生产使用吗？
+### 这个项目现在适合直接生产使用吗？
 
-不适合。当前更准确的定位是桌面输入原型和演示级 MVP。
-
-## Current Limitations
-
-- 仅支持 Windows
-- 依赖讯飞 IAT 在线服务
-- 文本注入依赖焦点恢复与粘贴，对特殊输入控件兼容性有限
-- 部分配置项尚未完全接入运行时
-- 还没有打包、自动安装和发布流程
-- 暂无正式演示素材
-
-## Roadmap
-
-- 补齐更稳定的依赖和打包方案
-- 让 UI 尺寸、偏移、字体等配置真正接入运行时
-- 让 `asr.language` / `asr.accent` 从配置驱动
-- 增加热词词典与低音量优化
-- 增加口语转书面语润色能力
-- 补充演示 GIF、截图和异常场景说明
-
-## Key Entry Points
-
-- [`src/app/main.py`](/D:/LearnPython/InnerVoice/src/app/main.py)
-- [`src/modules/asr/audio_capture.py`](/D:/LearnPython/InnerVoice/src/modules/asr/audio_capture.py)
-- [`src/modules/asr/iat_client.py`](/D:/LearnPython/InnerVoice/src/modules/asr/iat_client.py)
-- [`src/modules/hotkey/hotkey_manager.py`](/D:/LearnPython/InnerVoice/src/modules/hotkey/hotkey_manager.py)
-- [`src/modules/injector/text_injector.py`](/D:/LearnPython/InnerVoice/src/modules/injector/text_injector.py)
-- [`src/modules/overlay/overlay_window.py`](/D:/LearnPython/InnerVoice/src/modules/overlay/overlay_window.py)
+不适合。当前更准确的定位是桌面语音输入原型和演示级 MVP。
 
 ## Contributing
 
@@ -299,8 +295,8 @@ pytest tests/unit -q
 - 依赖管理与打包
 - UI / UX 优化
 - ASR 稳定性与配置能力
-- 自动化测试覆盖
-- 文档、截图、演示素材
+- 自动化测试补充
+- 文档、截图与演示素材
 
 提交前建议至少执行：
 
@@ -310,4 +306,4 @@ pytest tests/unit -q
 
 ## License
 
-本项目采用 MIT License，详见 [`LICENSE`](/D:/LearnPython/InnerVoice/LICENSE)。
+本项目采用 MIT License，详见 [LICENSE](/D:/LearnPython/InnerVoice/LICENSE)。
