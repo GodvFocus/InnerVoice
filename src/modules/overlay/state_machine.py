@@ -1,25 +1,23 @@
-"""状态机 - 管理 5 状态转换规则, 通过 Signal 通知 UI"""
+"""状态机 - 管理 4 状态转换规则, 通过 Signal 通知 UI"""
 
 from PySide6.QtCore import QObject, Signal
 
 from shared.types.enums import AppState
 
 
-# 合法转换表: from_state -> {to_state, ...}
 TRANSITIONS: dict[AppState, set[AppState]] = {
     AppState.IDLE:       {AppState.LISTENING},
-    AppState.LISTENING:  {AppState.PROCESSING, AppState.ERROR, AppState.IDLE},
-    AppState.PROCESSING: {AppState.PREVIEW, AppState.ERROR, AppState.IDLE},
+    AppState.LISTENING:  {AppState.PREVIEW, AppState.IDLE, AppState.ERROR},
     AppState.PREVIEW:    {AppState.IDLE, AppState.ERROR},
     AppState.ERROR:      {AppState.IDLE},
 }
 
 
 class StateMachine(QObject):
-    """五状态语音输入状态机
+    """四状态语音输入状态机
 
     状态:
-        IDLE -> LISTENING -> PROCESSING -> PREVIEW -> IDLE
+        IDLE -> LISTENING -> PREVIEW -> IDLE
         任意状态 -> ERROR -> IDLE
     """
 
@@ -38,7 +36,6 @@ class StateMachine(QObject):
         if to_state == self._current_state:
             return False
         allowed = TRANSITIONS.get(self._current_state, set())
-        # ERROR 状态可以从任意状态进入
         if to_state == AppState.ERROR or to_state in allowed:
             old = self._current_state
             self._current_state = to_state
