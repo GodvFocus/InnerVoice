@@ -41,11 +41,16 @@ def main():
     settings = Settings()
 
     # 数据库与主窗口初始化
-    data_dir = Path(__file__).parent.parent.parent / "data"
-    db_path = init_db(data_dir)
-    prompt_manager = PromptManager(db_path)
-    main_window = MainWindow(prompt_manager)
-    main_window.show()
+    try:
+        data_dir = Path(__file__).parent.parent.parent / "data"
+        db_path = init_db(data_dir)
+        prompt_manager = PromptManager(db_path)
+        main_window = MainWindow(prompt_manager)
+        main_window.show()
+    except Exception as e:
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.critical(None, "启动失败", f"数据库初始化失败：{e}")
+        sys.exit(1)
 
     state_machine = StateMachine()
     overlay = OverlayWindow()
