@@ -145,22 +145,19 @@ class OverlayWindow(QWidget):
             self._status_label.setText("录音中")
             self._btn_confirm.setVisible(False)
             self._btn_cancel.setVisible(False)
-            self.show()
-
-        elif new_state == AppState.PROCESSING:
-            self._status_label.setText("识别中...")
-            self._btn_confirm.setVisible(False)
-            self._btn_cancel.setVisible(False)
+            self._btn_cancel.setText("取消")
             self.show()
 
         elif new_state == AppState.PREVIEW:
             self._status_label.setText("完成")
             self._btn_confirm.setVisible(True)
             self._btn_cancel.setVisible(True)
+            self._btn_cancel.setText("取消")
             self.show()
 
         elif new_state == AppState.ERROR:
             self._status_label.setText("错误")
+            self.set_text("")
             self._btn_confirm.setVisible(False)
             self._btn_cancel.setVisible(True)
             self._btn_cancel.setText("关闭")
