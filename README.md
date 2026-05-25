@@ -161,6 +161,8 @@ DEFAULTS
 | `hotkey`                                          | 触发语音输入的热键，默认 `right ctrl` |
 | `long_press_threshold_ms`                         | 长按阈值，默认 `300` 毫秒             |
 | `panel_width` / `panel_height` / `panel_offset_y` | 悬浮窗尺寸与位置参数                  |
+| `font_size`                                        | 悬浮窗字体大小，默认 `13`              |
+| `idle_timeout_seconds`                             | 闲置超时自动隐藏，默认 `30` 秒         |
 | `asr.appid` / `asr.apikey` / `asr.apisecret`      | 讯飞 IAT 语音识别凭据                 |
 | `asr.language` / `asr.accent`                     | 识别语言与口音参数                    |
 | `polish.api_key`                                  | DeepSeek 润色 API Key                 |
@@ -170,11 +172,13 @@ DEFAULTS
 
 ```text
 InnerVoice/
+├─ .gitignore
+├─ LICENSE
 ├─ assets/                     # 图标等静态资源
 ├─ configs/                    # 默认配置、共享配置与本地覆盖配置
-├─ data/                       # SQLite 数据文件目录
-├─ docs/                       # 设计与计划文档
+├─ requirements.txt
 ├─ src/
+│  ├─ README.md                # 源码结构说明
 │  ├─ app/                     # 应用入口与启动编排
 │  ├─ core/config/             # 配置加载与深度合并
 │  ├─ db/                      # SQLite 初始化与连接管理
@@ -187,7 +191,6 @@ InnerVoice/
 │  ├─ shared/types/            # 共享类型与状态枚举
 │  └─ ui/                      # 主窗口与风格管理页面
 ├─ tests/unit/                 # 单元测试
-├─ requirements.txt
 └─ README.md
 ```
 
@@ -237,6 +240,8 @@ D:\anaconda3\envs\any\python.exe -m pytest tests\unit -q
 - [src/modules/asr/iat_client.py](/D:/LearnPython/InnerVoice/src/modules/asr/iat_client.py)
 - [src/modules/asr/audio_capture.py](/D:/LearnPython/InnerVoice/src/modules/asr/audio_capture.py)
 - [src/modules/overlay/overlay_window.py](/D:/LearnPython/InnerVoice/src/modules/overlay/overlay_window.py)
+- [src/modules/overlay/state_machine.py](/D:/LearnPython/InnerVoice/src/modules/overlay/state_machine.py)
+- [src/shared/types/enums.py](/D:/LearnPython/InnerVoice/src/shared/types/enums.py)
 - [src/modules/injector/text_injector.py](/D:/LearnPython/InnerVoice/src/modules/injector/text_injector.py)
 - [src/modules/polish/polish_client.py](/D:/LearnPython/InnerVoice/src/modules/polish/polish_client.py)
 - [src/modules/polish/prompt_manager.py](/D:/LearnPython/InnerVoice/src/modules/polish/prompt_manager.py)
