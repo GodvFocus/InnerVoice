@@ -9,7 +9,7 @@ InnerVoice 是一个面向 Windows 桌面的语音输入应用。它把“长按
 
 项目当前基于 `PySide6 + Python` 构建，接入讯飞 IAT 进行流式语音识别，并结合 DeepSeek 提供文本润色能力。对用户来说，它更像一个轻量、克制、随时可唤起的桌面语音输入助手；对开发者来说，它提供了一套边界清晰的基础工程，适合继续扩展语音输入、文本优化和桌面交互能力。
 
-<iframe src="//player.bilibili.com/player.html?isOutside=true&aid=116635692177543&bvid=BV1FqGo6tEFP&cid=38608701998&p=1" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
+Demo演示视频：https://www.bilibili.com/video/BV1FqGo6tEFP
 
 ## 核心功能
 
