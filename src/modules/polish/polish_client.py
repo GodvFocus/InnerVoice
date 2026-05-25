@@ -5,8 +5,13 @@ from openai import OpenAI
 from PySide6.QtCore import QObject, Signal, QThread
 
 
-RETURN_ONLY_TEXT_SUFFIX = (
-    "\n\n只返回润色后的最终文本，不要解释，不要加引号，不要使用 Markdown。"
+CORE_POLISH_SYSTEM_PROMPT = (
+    "你是应用内置的文本润色助手。"
+    "你必须始终输出用户的最终意图，主动丢弃所有被后文否定、修正或放弃的前文片段。"
+    "如果用户在一句话里发生改口、自我纠正、时间修正、数字修正、对象修正或措辞回撤，"
+    "只保留最终确认的那部分意思进行润色。"
+    "保持最终意图不变，不补充用户未表达的新信息。"
+    "只返回润色后的最终文本，不要解释，不要加引号，不要使用 Markdown。"
 )
 
 
@@ -92,7 +97,11 @@ class PolishWorker(QObject):
                 messages=[
                     {
                         "role": "system",
-                        "content": self._system_prompt.rstrip() + RETURN_ONLY_TEXT_SUFFIX,
+                        "content": CORE_POLISH_SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "system",
+                        "content": self._system_prompt.rstrip(),
                     },
                     {"role": "user", "content": self._text},
                 ],

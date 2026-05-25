@@ -78,12 +78,48 @@ class TestPolishClient:
             call_kwargs = mock_client.chat.completions.create.call_args[1]
             assert call_kwargs["model"] == "deepseek-chat"
             assert call_kwargs["temperature"] == 0.3
-            assert len(call_kwargs["messages"]) == 2
+            assert len(call_kwargs["messages"]) == 3
             assert call_kwargs["messages"][0]["role"] == "system"
-            assert call_kwargs["messages"][0]["content"].startswith("系统提示词")
+            assert "最终意图" in call_kwargs["messages"][0]["content"]
+            assert "主动丢弃所有被后文否定、修正或放弃的前文片段" in call_kwargs["messages"][0]["content"]
             assert "只返回润色后的最终文本" in call_kwargs["messages"][0]["content"]
-            assert call_kwargs["messages"][1]["role"] == "user"
-            assert call_kwargs["messages"][1]["content"] == "口语文本"
+            assert call_kwargs["messages"][1]["role"] == "system"
+            assert call_kwargs["messages"][1]["content"] == "系统提示词"
+            assert call_kwargs["messages"][2]["role"] == "user"
+            assert call_kwargs["messages"][2]["content"] == "口语文本"
+
+    def test_core_rule_and_style_prompt_are_sent_separately(self, client, qtbot):
+        with patch("modules.polish.polish_client.OpenAI") as mock_openai:
+            mock_client = MagicMock()
+            mock_completion = MagicMock()
+            mock_completion.choices = [MagicMock()]
+            mock_completion.choices[0].message.content = "我今天下午四点半有个会"
+            mock_client.chat.completions.create.return_value = mock_completion
+            mock_openai.return_value = mock_client
+
+            client.polish(
+                "我今天下午两点半有个会，噢不不，是今天下午四点半的会",
+                "请润色得更正式一些",
+                "k",
+                "u",
+                "m",
+            )
+
+            with qtbot.waitSignal(client.result_ready, timeout=3000):
+                pass
+
+            messages = mock_client.chat.completions.create.call_args[1]["messages"]
+            assert messages[0]["role"] == "system"
+            assert "最终意图" in messages[0]["content"]
+            assert "被后文否定、修正或放弃" in messages[0]["content"]
+            assert messages[1] == {
+                "role": "system",
+                "content": "请润色得更正式一些",
+            }
+            assert messages[2] == {
+                "role": "user",
+                "content": "我今天下午两点半有个会，噢不不，是今天下午四点半的会",
+            }
 
     def test_extract_text_from_content_parts(self, client, qtbot):
         with patch("modules.polish.polish_client.OpenAI") as mock_openai:
